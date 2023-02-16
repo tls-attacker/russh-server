@@ -1,15 +1,13 @@
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use futures::FutureExt;
-use russh::server::{Auth, Session};
+use async_trait::async_trait;
+use russh::server::{Msg, Session};
 use russh::*;
 use russh_keys::*;
 use tokio::sync::Mutex;
@@ -102,6 +100,7 @@ async fn main() {
     let config = Arc::new(russh::server::Config {
         connection_timeout: Some(std::time::Duration::from_secs(3600)),
         auth_rejection_time: std::time::Duration::from_secs(3),
+        auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
         keys: vec![host_key],
         ..Default::default()
     });
@@ -110,19 +109,13 @@ async fn main() {
         users: Arc::new(config_file.users),
         id: 0,
     };
-    let addr_string = format!(
-        "{}:{}",
-        args.address.unwrap_or(config_file.address),
-        args.port.unwrap_or(config_file.port)
-    );
-    log::info!("Listening on {}...", addr_string);
-    russh::server::run(
-        config,
-        &std::net::SocketAddr::from_str(&addr_string).unwrap(),
-        sh,
-    )
-    .await
-    .unwrap();
+
+    let address = args.address.unwrap_or(config_file.address);
+    let port = args.port.unwrap_or(config_file.port);
+    log::info!("Listening on {}:{}...", address, port);
+    russh::server::run(config, (address, port), sh)
+        .await
+        .unwrap();
 }
 
 #[derive(Clone)]
@@ -152,39 +145,27 @@ impl server::Server for Server {
     }
 }
 
+#[async_trait]
 impl server::Handler for Server {
     type Error = anyhow::Error;
-    type FutureAuth =
-        Pin<Box<dyn core::future::Future<Output = anyhow::Result<(Self, Auth)>> + Send>>;
-    type FutureUnit =
-        Pin<Box<dyn core::future::Future<Output = anyhow::Result<(Self, Session)>> + Send>>;
-    type FutureBool =
-        Pin<Box<dyn core::future::Future<Output = anyhow::Result<(Self, Session, bool)>> + Send>>;
 
-    fn finished_auth(self, auth: Auth) -> Self::FutureAuth {
-        async { Ok((self, auth)) }.boxed()
-    }
-
-    fn finished_bool(self, b: bool, s: Session) -> Self::FutureBool {
-        async move { Ok((self, s, b)) }.boxed()
-    }
-
-    fn finished(self, s: Session) -> Self::FutureUnit {
-        async { Ok((self, s)) }.boxed()
-    }
-
-    fn channel_open_session(self, channel: ChannelId, session: Session) -> Self::FutureBool {
-        async move {
-            {
-                let mut clients = self.clients.lock().await;
-                clients.insert((self.id, channel), session.handle());
-            }
-            Ok((self, session, true))
+    async fn channel_open_session(
+        self,
+        channel: Channel<Msg>,
+        session: Session,
+    ) -> Result<(Self, bool, Session), Self::Error> {
+        {
+            let mut clients = self.clients.lock().await;
+            clients.insert((self.id, channel.id()), session.handle());
         }
-        .boxed()
+        Ok((self, true, session))
     }
 
-    fn auth_password(self, user: &str, password: &str) -> Self::FutureAuth {
+    async fn auth_password(
+        self,
+        user: &str,
+        password: &str,
+    ) -> Result<(Self, server::Auth), Self::Error> {
         let result = self
             .users
             .get(user)
@@ -194,10 +175,14 @@ impl server::Handler for Server {
             .unwrap_or_else(|| server::Auth::Reject {
                 proceed_with_methods: Some(MethodSet::all()),
             });
-        self.finished_auth(result)
+        Ok((self, result))
     }
 
-    fn auth_publickey(self, user: &str, k: &key::PublicKey) -> Self::FutureAuth {
+    async fn auth_publickey(
+        self,
+        user: &str,
+        k: &key::PublicKey,
+    ) -> Result<(Self, server::Auth), Self::Error> {
         let result = self
             .users
             .get(user)
@@ -206,24 +191,30 @@ impl server::Handler for Server {
             .unwrap_or_else(|| server::Auth::Reject {
                 proceed_with_methods: Some(MethodSet::all()),
             });
-        self.finished_auth(result)
+        Ok((self, result))
     }
 
-    fn data(mut self, channel: ChannelId, data: &[u8], mut session: Session) -> Self::FutureUnit {
+    async fn data(
+        mut self,
+        channel: ChannelId,
+        data: &[u8],
+        mut session: Session,
+    ) -> Result<(Self, Session), Self::Error> {
         let data = CryptoVec::from(format!("Got data: {}\r\n", String::from_utf8_lossy(data)));
-        async move {
-            {
-                self.post(data.clone()).await;
-            }
-            session.data(channel, data);
-            Ok((self, session))
-        }
-        .boxed()
+        self.post(data.clone()).await;
+        session.data(channel, data);
+        Ok((self, session))
     }
 
-    fn tcpip_forward(self, address: &str, port: u32, session: Session) -> Self::FutureBool {
+    async fn tcpip_forward(
+        self,
+        address: &str,
+        port: &mut u32,
+        session: Session,
+    ) -> Result<(Self, bool, Session), Self::Error> {
         let handle = session.handle();
         let address = address.to_string();
+        let port = *port;
         tokio::spawn(async move {
             let mut channel = handle
                 .channel_open_forwarded_tcpip(address, port, "1.2.3.4", 1234)
@@ -232,6 +223,6 @@ impl server::Handler for Server {
             let _ = channel.data(&b"Hello from a forwarded port"[..]).await;
             let _ = channel.eof().await;
         });
-        self.finished_bool(true, session)
+        Ok((self, true, session))
     }
 }

@@ -59,6 +59,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
 
 [[package]]
+name = "async-trait"
+version = "0.1.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cd7fce9ba8c3c042128ce72d8b2ddbf3a05747efb67ea0313c635e10bda47a2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -944,12 +955,13 @@ checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
 name = "russh"
-version = "0.34.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0aeb64c47850fd3cf76bf3f7d971400bfdf7afa06985dbf51b3a5aab91614c7"
+checksum = "e6cdd0c99823d858b1cab6b77bd0cdf4069e30a5212bbf5d94c478f7c9887b28"
 dependencies = [
  "aes",
  "aes-gcm",
+ "async-trait",
  "bitflags",
  "byteorder",
  "chacha20",
@@ -988,9 +1000,9 @@ dependencies = [
 
 [[package]]
 name = "russh-keys"
-version = "0.22.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac7f4ec55d4cecf14e2745ca944909cb34d781515627c4c80431c2a735f2dae6"
+checksum = "615654ffa6112500f8b1cde4085031ff3addb5664288817bcb585c829650ca20"
 dependencies = [
  "aes",
  "bcrypt-pbkdf",
@@ -1027,6 +1039,7 @@ name = "russh-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap",
  "ed25519-dalek",
  "env_logger",

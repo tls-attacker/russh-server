@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-russh = "0.34"
-russh-keys = "0.22"
+russh = "0.36"
+russh-keys = "0.24"
 ed25519-dalek = "1"
 tokio = "1"
 futures = "0.3"
@@ -17,3 +17,4 @@ anyhow = "1.0"
 clap = { version = "4.1.1", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.7"
+async-trait = "0.1"
