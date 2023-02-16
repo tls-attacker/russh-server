@@ -1,0 +1,66 @@
+exclude: Cargo\.lock
+default_language_version:
+    python: python3
+repos:
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.4.0
+      hooks:
+          - id: check-case-conflict
+          - id: check-json
+          - id: check-merge-conflict
+          - id: check-symlinks
+          - id: check-toml
+          - id: check-xml
+          - id: check-yaml
+          - id: destroyed-symlinks
+          - id: detect-private-key
+          - id: end-of-file-fixer
+          - id: fix-byte-order-marker
+          - id: forbid-new-submodules
+          - id: mixed-line-ending
+          - id: trailing-whitespace
+    - repo: https://github.com/codespell-project/codespell
+      rev: v2.2.2
+      hooks:
+          - id: codespell
+            args:
+                [
+                    --ignore-words=.codespellignore,
+                    --exclude-file=.codespellignorelines,
+                ]
+    - repo: https://github.com/doublify/pre-commit-rust
+      rev: v1.0
+      hooks:
+          - id: fmt
+            args: [--all, --]
+          - id: cargo-check
+            args: [--locked, --workspace, --all-features, --all-targets]
+          - id: clippy
+            args:
+                [
+                    --locked,
+                    --workspace,
+                    --all-features,
+                    --all-targets,
+                    --,
+                    -D,
+                    warnings,
+                ]
+    - repo: https://github.com/DavidAnson/markdownlint-cli2
+      rev: v0.6.0
+      hooks:
+          - id: markdownlint-cli2
+    - repo: https://github.com/pre-commit/mirrors-prettier
+      rev: v3.0.0-alpha.4
+      hooks:
+          - id: prettier
+            # We use markdowncli
+            exclude_types: [markdown]
+            # Avoid the following error message:
+            #b
+            #     [error] No matching files. Patterns: .git/COMMIT_EDITMSG
+            exclude: ^\.git/COMMIT_EDITMSG$
+    - repo: https://github.com/jorisroovers/gitlint
+      rev: v0.19.0dev
+      hooks:
+          - id: gitlint
